@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Save } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Save, AlertTriangle } from 'lucide-react';
 import { useGroups } from '../context/GroupContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -12,7 +12,7 @@ export default function CreateGroup() {
   
   // Stato del form
   const [groupName, setGroupName] = useState('');
-  const [members, setMembers] = useState(['', '']); // Partiamo con 2 membri vuoti
+  const [members, setMembers] = useState(['', '']); 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,20 +22,22 @@ export default function CreateGroup() {
     newMembers[index] = value;
     setMembers(newMembers);
     
-    // Pulisci errore se l'utente sta scrivendo
+    // Pulisci errore specifico se l'utente sta scrivendo
     if (errors[`member_${index}`]) {
       setErrors(prev => ({ ...prev, [`member_${index}`]: null }));
     }
+    // Pulisci errore generale
+    if (errors.general) {
+      setErrors(prev => ({ ...prev, general: null }));
+    }
   };
 
-  // Aggiungi un nuovo campo membro
   const addMemberField = () => {
     setMembers([...members, '']);
   };
 
-  // Rimuovi un membro
   const removeMemberField = (index) => {
-    if (members.length <= 2) return; // Minimo 2 membri per dividere spese
+    if (members.length <= 2) return; 
     const newMembers = members.filter((_, i) => i !== index);
     setMembers(newMembers);
   };
@@ -45,18 +47,29 @@ export default function CreateGroup() {
     e.preventDefault();
     const newErrors = {};
     
-    // Validazione Nome Gruppo
+    // 1. Validazione Nome Gruppo
     if (!groupName.trim()) {
       newErrors.name = "Il nome del gruppo è obbligatorio";
     }
 
-    // Validazione Membri
+    // 2. Filtra i membri vuoti
     const validMembers = members.map(m => m.trim()).filter(m => m !== '');
+
+    // 3. Controllo numero minimo
     if (validMembers.length < 2) {
       newErrors.general = "Servono almeno 2 persone per un gruppo.";
     }
 
-    // Controlla campi vuoti specifici
+    // 4. CONTROLLO DUPLICATI (FIX BUG)
+    // Creiamo un array di nomi minuscoli per controllare "Mario" vs "mario"
+    const lowerCaseNames = validMembers.map(name => name.toLowerCase());
+    const hasDuplicates = lowerCaseNames.some((name, index) => lowerCaseNames.indexOf(name) !== index);
+
+    if (hasDuplicates) {
+      newErrors.general = "Non puoi inserire due o più partecipanti con lo stesso nome.";
+    }
+
+    // Controlla campi vuoti specifici (estetico)
     members.forEach((member, index) => {
       if (!member.trim()) {
         newErrors[`member_${index}`] = "Inserisci un nome";
@@ -71,17 +84,15 @@ export default function CreateGroup() {
 
     setIsSubmitting(true);
     
-    // Simula un piccolo ritardo per UX (loading state)
     setTimeout(() => {
       addGroup(groupName, validMembers);
       setIsSubmitting(false);
-      navigate('/'); // Torna alla Home
+      navigate('/'); 
     }, 500);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header con tasto Indietro */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="w-6 h-6" />
@@ -95,10 +106,9 @@ export default function CreateGroup() {
         </CardHeader>
         <CardContent className="space-y-6">
           
-          {/* Nome Gruppo */}
           <Input 
             label="Nome del Gruppo" 
-            placeholder="Es. Vacanza in Grecia, Casa Milano..." 
+            placeholder="Es. Vacanza in Grecia" 
             value={groupName}
             onChange={(e) => {
               setGroupName(e.target.value);
@@ -119,12 +129,8 @@ export default function CreateGroup() {
                   error={errors[`member_${index}`]}
                   className="flex-1"
                 />
-                
-                {/* Tasto elimina (disabilitato se sono rimasti solo 2 membri) */}
                 <Button 
-                  type="button"
-                  variant="ghost" 
-                  size="icon"
+                  type="button" variant="ghost" size="icon"
                   onClick={() => removeMemberField(index)}
                   disabled={members.length <= 2}
                   className="mt-[2px] text-slate-400 hover:text-danger"
@@ -134,19 +140,19 @@ export default function CreateGroup() {
               </div>
             ))}
 
-            {/* Errore generale membri */}
+            {/* Visualizzazione Errore Generale (Duplicati) */}
             {errors.general && (
-              <p className="text-sm text-danger font-medium">{errors.general}</p>
+              <div className="bg-red-50 text-danger p-3 rounded-lg text-sm flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {errors.general}
+              </div>
             )}
 
             <Button 
-              type="button" 
-              variant="secondary" 
-              onClick={addMemberField}
+              type="button" variant="secondary" onClick={addMemberField}
               className="w-full border-dashed"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Aggiungi altra persona
+              <Plus className="w-4 h-4 mr-2" /> Aggiungi altra persona
             </Button>
           </div>
 
@@ -154,13 +160,8 @@ export default function CreateGroup() {
             <Button variant="ghost" className="flex-1" onClick={() => navigate('/')}>
               Annulla
             </Button>
-            <Button 
-              className="flex-1" 
-              onClick={handleSubmit}
-              isLoading={isSubmitting}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Crea Gruppo
+            <Button className="flex-1" onClick={handleSubmit} isLoading={isSubmitting}>
+              <Save className="w-4 h-4 mr-2" /> Crea Gruppo
             </Button>
           </div>
 

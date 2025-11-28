@@ -8,26 +8,36 @@ export function calculateGroupStats(group) {
 
   // 2. Itera su ogni spesa
   group.expenses.forEach(expense => {
-    const payer = expense.paidBy;
     const amount = expense.amount;
     
-    // MODIFICA: Usiamo involvedMembers se esiste, altrimenti tutti
+    // Gestione Chi Partecipa (Debitori)
     const involved = (expense.involvedMembers && expense.involvedMembers.length > 0) 
       ? expense.involvedMembers 
       : group.members;
 
-    // Se nessuno è coinvolto (caso limite), ignora
     if (involved.length === 0) return;
 
+    // Calcolo quota debito
     const splitAmount = amount / involved.length;
 
-    // Chi ha pagato riceve un credito (+)
-    // Nota: se il pagatore non è tra i coinvolti, riceve comunque il credito totale
-    if (balances[payer] !== undefined) {
-      balances[payer] += amount;
+    // A. GESTIONE CHI HA PAGATO (Creditori)
+    if (Array.isArray(expense.paidBy)) {
+      // CASO PAGAMENTO MULTIPLO (Nuovo)
+      // expense.paidBy è tipo: [{member: "Mario", amount: 10}, {member: "Luca", amount: 20}]
+      expense.paidBy.forEach(payment => {
+        if (balances[payment.member] !== undefined) {
+          balances[payment.member] += payment.amount;
+        }
+      });
+    } else {
+      // CASO PAGAMENTO SINGOLO (Vecchio/Compatibilità)
+      const payer = expense.paidBy;
+      if (balances[payer] !== undefined) {
+        balances[payer] += amount;
+      }
     }
 
-    // Tutti quelli coinvolti contraggono un debito (-)
+    // B. GESTIONE CHI DEVE PAGARE (Debitori)
     involved.forEach(member => {
       if (balances[member] !== undefined) {
         balances[member] -= splitAmount;
@@ -38,17 +48,18 @@ export function calculateGroupStats(group) {
   return balances;
 }
 
-// Algoritmo ottimizzato (Resto invariato ma incluso per completezza)
 export function calculateSettlements(balances) {
   let debtors = [];
   let creditors = [];
 
   Object.entries(balances).forEach(([member, amount]) => {
+    // Arrotondiamo per evitare problemi di virgola mobile
     const val = Math.round(amount * 100) / 100;
     if (val < -0.01) debtors.push({ member, amount: val });
     if (val > 0.01) creditors.push({ member, amount: val });
   });
 
+  // Ordina per grandezza
   debtors.sort((a, b) => a.amount - b.amount);
   creditors.sort((a, b) => b.amount - a.amount);
 
