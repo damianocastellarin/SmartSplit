@@ -1,9 +1,7 @@
 import React from 'react';
-import { Share2, FileText, MessageSquare, Download } from 'lucide-react';
+import { FileText, MessageSquare } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, showAlert }) {
   
@@ -21,7 +19,6 @@ export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, 
       });
     }
 
-    // Tenta la condivisione nativa (Mobile)
     if (navigator.share) {
       try {
         await navigator.share({
@@ -30,10 +27,9 @@ export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, 
         });
         onClose();
       } catch (err) {
-        console.log('Condivisione annullata o fallita', err);
+        console.log('Condivisione annullata', err);
       }
     } else {
-      // Fallback: Copia negli appunti (Desktop)
       navigator.clipboard.writeText(text);
       onClose();
       showAlert({
@@ -44,63 +40,89 @@ export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, 
     }
   };
 
-  // --- 2. GENERAZIONE E SCARICAMENTO PDF ---
+  // --- 2. METODO NATIVO "STAMPA / SALVA PDF" (NESSUNA LIBRERIA) ---
   const handleSharePDF = () => {
-    try {
-      const doc = new jsPDF();
+    // Creiamo il contenuto HTML per il PDF
+    const printContent = `
+      <div style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 40px;">
+          <h1 style="color: #1e293b; margin-bottom: 10px; font-size: 28px;">${group.name}</h1>
+          <p style="color: #64748b;">Riepilogo Spese e Saldi</p>
+        </div>
 
-      // Titolo
-      doc.setFontSize(20);
-      doc.text(group.name, 14, 22);
-      
-      doc.setFontSize(12);
-      doc.text(`Totale Spese: ${totalSpent.toFixed(2)}€`, 14, 32);
-      doc.text(`Generato il: ${new Date().toLocaleDateString('it-IT')}`, 14, 38);
+        <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+          <p style="margin: 0; font-size: 14px; color: #64748b;">Totale Spese Gruppo</p>
+          <p style="margin: 5px 0 0 0; font-size: 24px; font-weight: bold; color: #0f172a;">${totalSpent.toFixed(2)} €</p>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #94a3b8; margin-top: 10px;">Generato il: ${new Date().toLocaleDateString('it-IT')}</p>
+        </div>
+        
+        <h3 style="border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; color: #334155;">Piano dei Saldi</h3>
+        
+        ${settlements.length === 0 
+          ? '<p style="text-align: center; padding: 20px; color: #10b981; font-weight: bold;">✅ Tutti i conti sono in pari!</p>' 
+          : `
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+              <thead>
+                <tr style="background-color: #f1f5f9; text-align: left;">
+                  <th style="padding: 12px; border-bottom: 2px solid #cbd5e1; color: #475569;">Chi Paga (Debitore)</th>
+                  <th style="padding: 12px; border-bottom: 2px solid #cbd5e1; color: #475569;">A Chi (Creditore)</th>
+                  <th style="padding: 12px; border-bottom: 2px solid #cbd5e1; color: #475569; text-align: right;">Importo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${settlements.map(s => `
+                  <tr>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1e293b;">${s.from}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1e293b;">
+                      <span style="display: inline-flex; align-items: center;">
+                        <span style="margin-right: 6px;">→</span> ${s.to}
+                      </span>
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #0f172a; text-align: right;">${s.amount.toFixed(2)} €</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `
+        }
+        
+        <div style="margin-top: 60px; font-size: 12px; color: #cbd5e1; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+          Generato con SmartSplit
+        </div>
+      </div>
+    `;
 
-      // Tabella Saldi
-      if (settlements.length > 0) {
-        const tableData = settlements.map(s => [
-          s.from,
-          s.to,
-          `${s.amount.toFixed(2)} €`
-        ]);
-
-        doc.autoTable({
-          startY: 45,
-          head: [['Chi Paga (Debitore)', 'A Chi (Creditore)', 'Importo']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: { fillColor: [59, 130, 246] }, // Colore primary Tailwind (#3B82F6)
-        });
-      } else {
-        doc.text("Tutti i conti sono in pari!", 14, 50);
-      }
-
-      // Footer
-      const pageCount = doc.internal.getNumberOfPages();
-      doc.setFontSize(10);
-      for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.text('Generato con SmartSplit', 14, doc.internal.pageSize.height - 10);
-      }
-
-      // Salva il file
-      doc.save(`Riepilogo_${group.name.replace(/\s+/g, '_')}.pdf`);
-      
+    // Apriamo una nuova finestra invisibile per la stampa
+    const printWindow = window.open('', '_blank');
+    
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Riepilogo ${group.name}</title>
+          </head>
+          <body style="margin: 0; -webkit-print-color-adjust: exact;">
+            ${printContent}
+            <script>
+              // Aspetta che il contenuto sia caricato e poi stampa
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                  // Su mobile, dopo la stampa (o annulla), l'utente chiuderà la tab manualmente
+                  // Su desktop potremmo provare a chiuderla, ma spesso è bloccato
+                }, 500);
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
       onClose();
-      showAlert({
-        title: "PDF Scaricato",
-        message: "Il file PDF è stato generato correttamente.",
-        type: "info" // Usa 'confirm' se vuoi l'icona verde
-      });
-
-    } catch (error) {
-      console.error("Errore generazione PDF:", error);
-      onClose();
-      showAlert({
-        title: "Errore",
-        message: "Impossibile generare il PDF. Assicurati di aver installato 'jspdf' e 'jspdf-autotable'.",
-        type: "danger"
+    } else {
+      showAlert({ 
+        title: "Errore", 
+        message: "Il browser ha bloccato l'apertura del PDF. Consenti i popup per questa app.", 
+        type: "danger" 
       });
     }
   };
@@ -127,7 +149,7 @@ export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, 
             </div>
           </button>
 
-          {/* Opzione 2: PDF */}
+          {/* Opzione 2: PDF (Stampa Nativa) */}
           <button 
             onClick={handleSharePDF}
             className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm group"
@@ -136,8 +158,8 @@ export function ShareBalance({ isOpen, onClose, group, totalSpent, settlements, 
               <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <h4 className="font-semibold text-slate-900">Documento PDF</h4>
-              <p className="text-xs text-slate-500">Scarica un file formattato e stampabile</p>
+              <h4 className="font-semibold text-slate-900">Salva come PDF</h4>
+              <p className="text-xs text-slate-500">Genera un documento stampabile</p>
             </div>
           </button>
         </div>
