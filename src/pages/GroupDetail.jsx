@@ -7,8 +7,8 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
-import { AlertDialog } from '../components/ui/AlertDialog'; // NUOVO COMPONENTE
-import {cn} from '../utils/cn';
+import { AlertDialog } from '../components/ui/AlertDialog';
+import { cn } from '../utils/cn';
 import AddExpenseForm from '../components/AddExpenseForm';
 import BalancesList from '../components/BalancesList';
 import SettlementPlan from '../components/SettlementPlan';
@@ -27,7 +27,7 @@ export default function GroupDetail() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
 
-  // --- STATO PER GESTIONE ALERT UNIFICATI ---
+  // Stato Alert
   const [alertConfig, setAlertConfig] = useState({
     isOpen: false,
     title: '',
@@ -37,7 +37,7 @@ export default function GroupDetail() {
     onConfirm: null
   });
 
-  // Stati Gestione Settings
+  // Stati Settings
   const [editGroupName, setEditGroupName] = useState('');
   const [editMembers, setEditMembers] = useState([]);
   const [settingsError, setSettingsError] = useState('');
@@ -56,7 +56,6 @@ export default function GroupDetail() {
   const settlements = calculateSettlements(balances);
   const totalSpent = group.expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  // --- CALCOLO STATISTICHE MEMBRI ---
   const memberStats = useMemo(() => {
     const stats = group.members.map(member => {
       const paid = group.expenses.reduce((sum, exp) => {
@@ -77,10 +76,7 @@ export default function GroupDetail() {
     }));
   }, [group, balances]);
 
-  // --- HELPERS ---
-  const showAlert = (config) => {
-    setAlertConfig({ isOpen: true, ...config });
-  };
+  const showAlert = (config) => setAlertConfig({ isOpen: true, ...config });
 
   const formatPayerName = (expense) => {
     if (Array.isArray(expense.paidBy)) {
@@ -90,8 +86,6 @@ export default function GroupDetail() {
     return expense.paidBy;
   };
 
-  // --- SOSTITUZIONE WINDOW.CONFIRM ---
-  
   const handleSettleDebt = (settlement) => {
     showAlert({
       title: "Conferma Rimborso",
@@ -128,15 +122,10 @@ export default function GroupDetail() {
       await navigator.share({ title: group.name, text });
     } else {
       navigator.clipboard.writeText(text);
-      showAlert({
-        title: "Copiato!",
-        message: "Riepilogo copiato negli appunti.",
-        type: "info"
-      });
+      showAlert({ title: "Copiato!", message: "Riepilogo copiato negli appunti.", type: "info" });
     }
   };
 
-  // --- HANDLERS SETTINGS ---
   const handleMemberNameChange = (index, val) => {
     const newMembers = [...editMembers];
     newMembers[index].newName = val;
@@ -160,23 +149,18 @@ export default function GroupDetail() {
 
   const handleSaveSettings = () => {
     if (!editGroupName.trim()) return setSettingsError("Nome obbligatorio.");
-    
     const validMembers = editMembers.filter(m => m.newName.trim());
     if (validMembers.length < 2) return setSettingsError("Minimo 2 membri.");
-
     const lowerCaseNames = validMembers.map(m => m.newName.trim().toLowerCase());
     const hasDuplicates = lowerCaseNames.some((name, index) => lowerCaseNames.indexOf(name) !== index);
-
-    if (hasDuplicates) {
-      return setSettingsError("Ci sono nomi duplicati tra i partecipanti.");
-    }
+    if (hasDuplicates) return setSettingsError("Ci sono nomi duplicati tra i partecipanti.");
 
     updateGroupFull(group.id, editGroupName, validMembers.map(m => ({ oldName: m.isNew ? null : m.oldName, newName: m.newName.trim() })));
     setIsSettingsOpen(false);
   };
 
   const handleDeleteGroup = () => {
-    setIsSettingsOpen(false); // Chiudi settings prima di aprire l'alert
+    setIsSettingsOpen(false);
     showAlert({
       title: "Elimina Gruppo",
       message: "L'eliminazione è definitiva e irreversibile. Confermi?",
@@ -189,7 +173,6 @@ export default function GroupDetail() {
     });
   };
 
-  // --- ALTRI HANDLERS ---
   const handleOpenAdd = () => { setEditingExpense(null); setIsModalOpen(true); };
   const handleOpenEdit = (exp) => { setEditingExpense(exp); setIsModalOpen(true); };
   const handleSaveExpense = (data) => {
@@ -198,8 +181,7 @@ export default function GroupDetail() {
   };
 
   return (
-    <div className="pb-24 flex flex-col min-h-screen">
-      
+    <div className="flex flex-col min-h-full">
       {/* HEADER STICKY */}
       <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-sm">
         <div className="flex items-center justify-between p-4">
@@ -232,7 +214,6 @@ export default function GroupDetail() {
       </div>
 
       <div className="px-4 mt-6 space-y-6">
-
         {activeTab !== 'stats' && activeTab !== 'members' && (
           <div className="bg-gradient-to-r from-primary to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
             <p className="text-sm font-medium opacity-90 uppercase tracking-wider">Totale Gruppo</p>
@@ -329,13 +310,17 @@ export default function GroupDetail() {
 
         {/* TAB STATS */}
         {activeTab === 'stats' && <StatsDashboard group={group} />}
-      
       </div> 
 
-      {/* FAB */}
-      <div className="fixed bottom-6 right-6 z-20 md:absolute md:bottom-6 md:right-6">
-        <Button onClick={handleOpenAdd} className="h-14 px-6 rounded-full shadow-xl bg-primary hover:bg-primary-hover text-white flex items-center gap-2"><Plus className="w-6 h-6" /><span className="font-medium">Spesa</span></Button>
-      </div>
+      {/* FAB: Mostra SOLO se siamo nel tab 'expenses' */}
+      {activeTab === 'expenses' && (
+        <div className="absolute bottom-6 right-6 z-20">
+          <Button onClick={handleOpenAdd} className="h-14 px-6 rounded-full shadow-xl bg-primary hover:bg-primary-hover text-white flex items-center gap-2">
+            <Plus className="w-6 h-6" />
+            <span className="font-medium">Spesa</span>
+          </Button>
+        </div>
+      )}
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingExpense ? "Modifica" : "Nuova Spesa"}>
         <AddExpenseForm group={group} onSubmit={handleSaveExpense} onCancel={() => setIsModalOpen(false)} initialData={editingExpense} />
@@ -371,7 +356,7 @@ export default function GroupDetail() {
         </div>
       </Modal>
 
-      {/* --- NUOVO COMPONENTE ALERT MODULARIZZATO --- */}
+      {/* ALERT COMPONENT */}
       <AlertDialog 
         isOpen={alertConfig.isOpen}
         onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
@@ -381,7 +366,6 @@ export default function GroupDetail() {
         confirmText={alertConfig.confirmText}
         onConfirm={alertConfig.onConfirm}
       />
-
     </div>
   );
 }
