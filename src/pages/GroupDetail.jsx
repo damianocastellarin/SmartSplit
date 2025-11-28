@@ -23,6 +23,9 @@ export default function GroupDetail() {
   // Stati UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // NUOVO STATO PER LA MODALE DI CONFERMA ELIMINAZIONE
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); 
+  
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
 
@@ -35,7 +38,7 @@ export default function GroupDetail() {
     if (group) {
       setEditGroupName(group.name);
       setEditMembers(group.members.map((m, i) => ({ id: i, oldName: m, newName: m, isNew: false })));
-      setSettingsError(''); // Resetta errori all'apertura
+      setSettingsError(''); 
     }
   }, [group, isSettingsOpen]);
 
@@ -77,6 +80,7 @@ export default function GroupDetail() {
 
   const handleSettleDebt = (settlement) => {
     const confirmMsg = `Confermi che ${settlement.from} ha restituito ${settlement.amount.toFixed(2)}€ a ${settlement.to}?`;
+    // Nota: anche questo confirm potrebbe essere sostituito in futuro, ma ci concentriamo sul gruppo per ora
     if (window.confirm(confirmMsg)) {
       addExpense(group.id, {
         description: "Saldo Debiti",
@@ -88,12 +92,12 @@ export default function GroupDetail() {
     }
   };
 
-  // --- HANDLERS SETTINGS (CON FIX DUPLICATI) ---
+  // --- HANDLERS SETTINGS ---
   const handleMemberNameChange = (index, val) => {
     const newMembers = [...editMembers];
     newMembers[index].newName = val;
     setEditMembers(newMembers);
-    setSettingsError(''); // Pulisci errore mentre scrive
+    setSettingsError(''); 
   };
 
   const handleAddMemberSlot = () => setEditMembers([...editMembers, { id: Date.now(), oldName: null, newName: '', isNew: true }]);
@@ -113,12 +117,9 @@ export default function GroupDetail() {
   const handleSaveSettings = () => {
     if (!editGroupName.trim()) return setSettingsError("Nome obbligatorio.");
     
-    // Filtra e pulisce i nomi
     const validMembers = editMembers.filter(m => m.newName.trim());
-    
     if (validMembers.length < 2) return setSettingsError("Minimo 2 membri.");
 
-    // --- CONTROLLO DUPLICATI (FIX) ---
     const lowerCaseNames = validMembers.map(m => m.newName.trim().toLowerCase());
     const hasDuplicates = lowerCaseNames.some((name, index) => lowerCaseNames.indexOf(name) !== index);
 
@@ -130,7 +131,19 @@ export default function GroupDetail() {
     setIsSettingsOpen(false);
   };
 
-  const handleDeleteGroup = () => { if (window.confirm('Eliminazione irreversibile. Confermi?')) { deleteGroup(group.id); navigate('/'); }};
+  // --- NUOVA LOGICA DI ELIMINAZIONE GRUPPO ---
+  
+  // 1. Trigger iniziale (clic sul bottone rosso in Impostazioni)
+  const handleTriggerDeleteGroup = () => {
+    setIsSettingsOpen(false); // Chiudiamo le impostazioni
+    setIsDeleteModalOpen(true); // Apriamo la modale di conferma
+  };
+
+  // 2. Conferma effettiva (clic su "Elimina" nella modale)
+  const handleConfirmDelete = () => {
+    deleteGroup(group.id);
+    navigate('/');
+  };
 
   // --- ALTRI HANDLERS ---
   const handleOpenAdd = () => { setEditingExpense(null); setIsModalOpen(true); };
@@ -151,8 +164,6 @@ export default function GroupDetail() {
       
       {/* --- INIZIO BLOCCO FISSO (STICKY) --- */}
       <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-sm">
-        
-        {/* Header (Titolo e Bottoni) */}
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <Link to="/"><Button variant="ghost" size="icon"><ArrowLeft className="w-6 h-6" /></Button></Link>
@@ -167,7 +178,6 @@ export default function GroupDetail() {
           </div>
         </div>
 
-        {/* Tabs di Navigazione (Spostate qui dentro per rimanere fisse) */}
         <div className="px-4 pb-2">
           <div className="grid grid-cols-4 bg-slate-100 p-1 rounded-lg overflow-x-auto">
             {['expenses', 'members', 'balances', 'stats'].map(tab => (
@@ -182,12 +192,11 @@ export default function GroupDetail() {
           </div>
         </div>
       </div>
-      {/* --- FINE BLOCCO FISSO --- */}
 
-      {/* CONTENUTO SCROLLABILE (Con padding laterale) */}
+      {/* CONTENUTO SCROLLABILE */}
       <div className="px-4 mt-6 space-y-6">
 
-        {/* Banner Totale (Scorre col contenuto) */}
+        {/* Banner Totale */}
         {activeTab !== 'stats' && activeTab !== 'members' && (
           <div className="bg-gradient-to-r from-primary to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
             <p className="text-sm font-medium opacity-90 uppercase tracking-wider">Totale Gruppo</p>
@@ -286,17 +295,18 @@ export default function GroupDetail() {
         {activeTab === 'stats' && <StatsDashboard group={group} />}
       
       </div> 
-      {/* Fine Contenuto Scrollabile */}
 
       {/* FAB */}
       <div className="fixed bottom-6 right-6 z-20 md:absolute md:bottom-6 md:right-6">
         <Button onClick={handleOpenAdd} className="h-14 px-6 rounded-full shadow-xl bg-primary hover:bg-primary-hover text-white flex items-center gap-2"><Plus className="w-6 h-6" /><span className="font-medium">Spesa</span></Button>
       </div>
 
+      {/* MODALE AGGIUNGI/MODIFICA SPESA */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingExpense ? "Modifica" : "Nuova Spesa"}>
         <AddExpenseForm group={group} onSubmit={handleSaveExpense} onCancel={() => setIsModalOpen(false)} initialData={editingExpense} />
       </Modal>
 
+      {/* MODALE IMPOSTAZIONI */}
       <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Impostazioni">
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
           <Input label="Nome del Gruppo" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} />
@@ -320,12 +330,40 @@ export default function GroupDetail() {
           <div className="mt-8 pt-6 border-t border-slate-100">
             <h4 className="text-sm font-semibold text-slate-900 mb-1">Zona Pericolosa</h4>
             <p className="text-xs text-slate-500 mb-4">L'eliminazione del gruppo è definitiva.</p>
-            <Button variant="ghost" className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" onClick={handleDeleteGroup}>
+            {/* QUI HO MODIFICATO IL BOTTONE PER USARE LA NUOVA FUNZIONE TRIGGER */}
+            <Button 
+              variant="ghost" 
+              className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" 
+              onClick={handleTriggerDeleteGroup}
+            >
               <Trash2 className="w-4 h-4 mr-2" /> Elimina Gruppo
             </Button>
           </div>
         </div>
       </Modal>
+
+      {/* NUOVA MODALE DI CONFERMA ELIMINAZIONE */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Elimina Gruppo">
+        <div className="space-y-4">
+          <div className="bg-red-50 text-danger p-4 rounded-lg flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-bold mb-1">Sei sicuro?</p>
+              <p>L'azione è irreversibile. Tutte le spese, i saldi e la cronologia verranno cancellati per sempre.</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setIsDeleteModalOpen(false)}>
+              Annulla
+            </Button>
+            <Button variant="danger" className="flex-1 bg-danger text-white hover:bg-red-600" onClick={handleConfirmDelete}>
+              Elimina
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }
