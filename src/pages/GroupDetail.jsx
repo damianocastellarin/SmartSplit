@@ -54,11 +54,21 @@ export default function GroupDetail() {
 
   const balances = calculateGroupStats(group);
   const settlements = calculateSettlements(balances);
-  const totalSpent = group.expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  
+  // --- FIX LOGICA TOTALE ---
+  // Calcoliamo il totale escludendo i rimborsi ("Saldo Debiti")
+  const totalSpent = group.expenses.reduce((sum, exp) => {
+    if (exp.description === "Saldo Debiti") return sum;
+    return sum + exp.amount;
+  }, 0);
 
   const memberStats = useMemo(() => {
     const stats = group.members.map(member => {
       const paid = group.expenses.reduce((sum, exp) => {
+        // Ignoriamo i rimborsi anche nel calcolo di "chi ha speso di più" per le statistiche
+        // (Nota: il balance invece DEVE includerli, e lo fa già nel balanceService)
+        if (exp.description === "Saldo Debiti") return sum;
+
         if (Array.isArray(exp.paidBy)) {
           const payment = exp.paidBy.find(p => p.member === member);
           return sum + (payment ? payment.amount : 0);

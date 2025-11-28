@@ -5,19 +5,18 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { TrendingUp, PieChart as PieIcon, Award } from 'lucide-react';
 
-// Colori presi dal tuo tema (Tailwind config)
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 export default function StatsDashboard({ group }) {
   
-  // --- ELABORAZIONE DATI (Smart Logic) ---
   const stats = useMemo(() => {
-    const expenses = group.expenses;
+    // FIX: Filtriamo le spese per escludere i rimborsi
+    const expenses = group.expenses.filter(e => e.description !== "Saldo Debiti");
+    
     const total = expenses.reduce((sum, e) => sum + e.amount, 0);
     const average = total / (group.members.length || 1);
 
     // 1. Dati per Timeline (Bar Chart)
-    // Raggruppa le spese per data
     const timelineMap = {};
     expenses.forEach(e => {
       const date = new Date(e.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
@@ -25,10 +24,9 @@ export default function StatsDashboard({ group }) {
     });
     const timelineData = Object.entries(timelineMap).map(([date, amount]) => ({
       date, amount
-    })).reverse(); // Mettiamo in ordine cronologico
+    })).reverse(); 
 
-    // 2. Dati per Categorie (Pie Chart) - AUTO-TAGGING
-    // Dato che non abbiamo il campo categoria, lo indoviniamo dalla descrizione!
+    // 2. Dati per Categorie (Pie Chart)
     const categoryMap = {};
     expenses.forEach(e => {
       let cat = 'Altro';
@@ -45,16 +43,27 @@ export default function StatsDashboard({ group }) {
     // 3. Top Spenders
     const spenderMap = {};
     expenses.forEach(e => {
-      spenderMap[e.paidBy] = (spenderMap[e.paidBy] || 0) + e.amount;
+      // Per i grafici, consideriamo solo chi ha PAGATO, ignorando i rimborsi
+      const payer = Array.isArray(e.paidBy) ? e.paidBy[0].member : e.paidBy; // Semplificazione per visualizzazione
+      
+      // Se è pagamento multiplo, dovremmo iterare, ma per semplicità grafica prendiamo il principale o sommiamo
+      if (Array.isArray(e.paidBy)) {
+         e.paidBy.forEach(p => {
+            spenderMap[p.member] = (spenderMap[p.member] || 0) + p.amount;
+         });
+      } else {
+         spenderMap[e.paidBy] = (spenderMap[e.paidBy] || 0) + e.amount;
+      }
     });
+    
     const topSpenders = Object.entries(spenderMap)
-      .sort(([, a], [, b]) => b - a) // Ordina decrescente
+      .sort(([, a], [, b]) => b - a)
       .map(([name, amount]) => ({ name, amount }));
 
     return { total, average, timelineData, categoryData, topSpenders };
   }, [group]);
 
-  if (group.expenses.length === 0) {
+  if (group.expenses.filter(e => e.description !== "Saldo Debiti").length === 0) {
     return <div className="text-center text-slate-500 py-10">Nessun dato per le statistiche.</div>;
   }
 
@@ -129,7 +138,6 @@ export default function StatsDashboard({ group }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          {/* Legenda manuale */}
           <div className="flex flex-wrap justify-center gap-3 mt-2">
             {stats.categoryData.map((entry, index) => (
               <div key={index} className="flex items-center text-xs text-slate-600">
@@ -164,7 +172,6 @@ export default function StatsDashboard({ group }) {
                 <span className="font-medium text-slate-700">{person.name}</span>
               </div>
               <div className="flex items-center gap-2">
-                {/* Progress bar visiva */}
                 <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-primary" 

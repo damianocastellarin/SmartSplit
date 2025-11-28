@@ -1,33 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Users, ArrowRight, CheckCircle2, Clock, Sparkles } from 'lucide-react';
+import { Plus, Users, ArrowRight, Sparkles, Receipt } from 'lucide-react';
 import { useGroups } from '../context/GroupContext';
-import { calculateGroupStats, calculateSettlements } from '../services/balanceService';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 
 export default function Home() {
   const { groups } = useGroups();
-
-  // --- LOGICA STATUS GRUPPO ---
-  const getGroupStatus = (group) => {
-    // 1. STATUS: NUOVO (Nessuna spesa)
-    if (!group.expenses || group.expenses.length === 0) {
-      return { status: 'empty', amount: 0 };
-    }
-
-    // 2. Calcola i saldi
-    const balances = calculateGroupStats(group);
-    const settlements = calculateSettlements(balances);
-    const totalPending = settlements.reduce((sum, s) => sum + s.amount, 0);
-
-    // 3. STATUS: SALDATO vs IN CORSO
-    if (totalPending < 0.1) {
-      return { status: 'settled', amount: 0 };
-    } else {
-      return { status: 'pending', amount: totalPending };
-    }
-  };
 
   return (
     <div className="space-y-6 pb-24">
@@ -64,7 +43,13 @@ export default function Home() {
           // --- LISTA GRUPPI ---
           <>
             {groups.map((group) => {
-              const { status, amount } = getGroupStatus(group);
+              // FIX: CALCOLO TOTALE SPESE GRUPPO (ESCLUDENDO RIMBORSI)
+              const totalGroupSpent = group.expenses?.reduce((sum, exp) => {
+                if (exp.description === "Saldo Debiti") return sum;
+                return sum + exp.amount;
+              }, 0) || 0;
+              
+              const isEmpty = group.expenses?.length === 0;
 
               return (
                 <Link to={`/group/${group.id}`} key={group.id} className="block group-card relative">
@@ -81,8 +66,7 @@ export default function Home() {
                           <h3 className="font-semibold text-slate-900 truncate pr-2">{group.name}</h3>
                           <div className="flex items-center text-sm text-slate-500">
                              <span>{group.members.length} membri</span>
-                             {/* Badge conteggio spese solo se ce ne sono */}
-                             {group.expenses.length > 0 && (
+                             {!isEmpty && (
                                <span className="hidden sm:inline"> • {group.expenses.length} spese</span>
                              )}
                           </div>
@@ -92,31 +76,19 @@ export default function Home() {
                       {/* BADGE DI STATUS (LATO DESTRO) */}
                       <div className="flex items-center gap-3">
                         
-                        {/* CASO 1: VUOTO (NUOVO) */}
-                        {status === 'empty' && (
+                        {isEmpty ? (
                           <div className="flex items-center gap-1.5 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-slate-200">
                             <Sparkles className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Nuovo</span>
                           </div>
-                        )}
-
-                        {/* CASO 2: SALDATO */}
-                        {status === 'settled' && (
-                          <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Saldato</span>
+                        ) : (
+                          // MOSTRA IL TOTALE SPESO DEL GRUPPO (CORRETTO)
+                          <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-blue-100">
+                            <Receipt className="w-3.5 h-3.5 opacity-70" />
+                            <span>{totalGroupSpent.toFixed(2)} €</span>
                           </div>
                         )}
 
-                        {/* CASO 3: IN CORSO (PENDING) */}
-                        {status === 'pending' && (
-                          <div className="flex items-center gap-1.5 bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-orange-200">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>-{amount.toFixed(0)}€</span>
-                          </div>
-                        )}
-
-                        {/* Freccina decorativa */}
                         <ArrowRight className="w-5 h-5 text-slate-300 ml-1" />
                       </div>
                     </CardContent>
@@ -125,8 +97,8 @@ export default function Home() {
               );
             })}
             
-            {/* FAB */}
-            <div className="fixed bottom-6 right-6 md:absolute md:bottom-6 md:right-6">
+            {/* FAB HOME */}
+            <div className="absolute bottom-6 right-6 z-20">
               <Link to="/create-group">
                 <Button size="icon" className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary-hover text-white">
                   <Plus className="w-6 h-6" />
