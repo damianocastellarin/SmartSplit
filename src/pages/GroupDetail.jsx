@@ -8,6 +8,7 @@ import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { AlertDialog } from '../components/ui/AlertDialog';
+import { ShareBalance } from '../components/ShareBalance'; // NUOVO COMPONENTE
 import { cn } from '../utils/cn';
 import AddExpenseForm from '../components/AddExpenseForm';
 import BalancesList from '../components/BalancesList';
@@ -24,6 +25,8 @@ export default function GroupDetail() {
   // Stati UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false); // NUOVO STATO
+  
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
 
@@ -120,18 +123,6 @@ export default function GroupDetail() {
     });
   };
 
-  const handleShare = async () => {
-    let text = `📊 *${group.name}*\n\nTotale: ${totalSpent.toFixed(2)}€\n\n*SALDI:*\n`;
-    settlements.forEach(s => text += `👉 ${s.from} -> ${s.to}: ${s.amount.toFixed(2)}€\n`);
-    
-    if (navigator.share) {
-      await navigator.share({ title: group.name, text });
-    } else {
-      navigator.clipboard.writeText(text);
-      showAlert({ title: "Copiato!", message: "Riepilogo copiato negli appunti.", type: "info" });
-    }
-  };
-
   const handleMemberNameChange = (index, val) => {
     const newMembers = [...editMembers];
     newMembers[index].newName = val;
@@ -199,7 +190,17 @@ export default function GroupDetail() {
             </div>
           </div>
           <div className="flex gap-1">
-            {activeTab === 'balances' && settlements.length > 0 && <Button variant="ghost" size="icon" onClick={handleShare} className="text-primary"><Share2 className="w-5 h-5" /></Button>}
+            {/* BOTTONE SHARE MODIFICATO: Apre la Modale */}
+            {activeTab === 'balances' && settlements.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsShareModalOpen(true)} 
+                className="text-primary"
+              >
+                <Share2 className="w-5 h-5" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)}><Settings className="w-5 h-5 text-slate-600" /></Button>
           </div>
         </div>
@@ -247,7 +248,6 @@ export default function GroupDetail() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        {/* MODIFICA: Visualizzazione in Rosso con Meno se è una spesa normale */}
                         <span className={cn("block font-bold", isSettlement ? "text-emerald-600" : "text-red-600")}>
                           {isSettlement ? '' : '-'}
                           {expense.amount.toFixed(2)} €
@@ -368,6 +368,16 @@ export default function GroupDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* --- NUOVA MODALE CONDIVISIONE --- */}
+      <ShareBalance
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        group={group}
+        totalSpent={totalSpent}
+        settlements={settlements}
+        showAlert={showAlert} // Passiamo la funzione per mostrare gli alert
+      />
 
       {/* ALERT COMPONENT */}
       <AlertDialog 
