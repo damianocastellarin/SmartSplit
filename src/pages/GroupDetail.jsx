@@ -55,8 +55,7 @@ export default function GroupDetail() {
   const balances = calculateGroupStats(group);
   const settlements = calculateSettlements(balances);
   
-  // --- FIX LOGICA TOTALE ---
-  // Calcoliamo il totale escludendo i rimborsi ("Saldo Debiti")
+  // Calcolo Totale (Escludendo i rimborsi)
   const totalSpent = group.expenses.reduce((sum, exp) => {
     if (exp.description === "Saldo Debiti") return sum;
     return sum + exp.amount;
@@ -65,10 +64,7 @@ export default function GroupDetail() {
   const memberStats = useMemo(() => {
     const stats = group.members.map(member => {
       const paid = group.expenses.reduce((sum, exp) => {
-        // Ignoriamo i rimborsi anche nel calcolo di "chi ha speso di più" per le statistiche
-        // (Nota: il balance invece DEVE includerli, e lo fa già nel balanceService)
         if (exp.description === "Saldo Debiti") return sum;
-
         if (Array.isArray(exp.paidBy)) {
           const payment = exp.paidBy.find(p => p.member === member);
           return sum + (payment ? payment.amount : 0);
@@ -235,30 +231,37 @@ export default function GroupDetail() {
         {activeTab === 'expenses' && (
           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {group.expenses.length === 0 ? <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-xl border border-dashed"><p>Nessuna spesa.</p></div> : 
-              group.expenses.map((expense) => (
-                <Card key={expense.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent className="p-4 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-medium text-slate-900">{expense.description}</h3>
-                      <div className="flex items-center text-xs text-slate-500 mt-1 gap-2">
-                        <span className="font-medium text-primary">{formatPayerName(expense)}</span>
-                        <span>•</span>
-                        <span>{new Date(expense.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
-                        {expense.description === "Saldo Debiti" && <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">RIMBORSO</span>}
+              group.expenses.map((expense) => {
+                const isSettlement = expense.description === "Saldo Debiti";
+                
+                return (
+                  <Card key={expense.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-4 flex justify-between items-center">
+                      <div>
+                        <h3 className="font-medium text-slate-900">{expense.description}</h3>
+                        <div className="flex items-center text-xs text-slate-500 mt-1 gap-2">
+                          <span className="font-medium text-primary">{formatPayerName(expense)}</span>
+                          <span>•</span>
+                          <span>{new Date(expense.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
+                          {isSettlement && <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">RIMBORSO</span>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className={cn("block font-bold", expense.description === "Saldo Debiti" ? "text-emerald-600" : "text-slate-900")}>
-                        {expense.amount.toFixed(2)} €
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleOpenEdit(expense)} className="p-2 text-slate-400 hover:text-blue-500 rounded-full"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => handleDeleteExpense(expense.id)} className="p-2 text-slate-400 hover:text-danger rounded-full"><Trash2 className="w-4 h-4" /></button>
+                      <div className="flex items-center gap-4">
+                        {/* MODIFICA: Visualizzazione in Rosso con Meno se è una spesa normale */}
+                        <span className={cn("block font-bold", isSettlement ? "text-emerald-600" : "text-red-600")}>
+                          {isSettlement ? '' : '-'}
+                          {expense.amount.toFixed(2)} €
+                        </span>
+                        
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleOpenEdit(expense)} className="p-2 text-slate-400 hover:text-blue-500 rounded-full"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteExpense(expense.id)} className="p-2 text-slate-400 hover:text-danger rounded-full"><Trash2 className="w-4 h-4" /></button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             }
           </div>
         )}
