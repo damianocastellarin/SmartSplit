@@ -7,7 +7,8 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
-import { cn } from '../utils/cn';
+import { AlertDialog } from '../components/ui/AlertDialog'; // NUOVO COMPONENTE
+import {cn} from '../utils/cn';
 import AddExpenseForm from '../components/AddExpenseForm';
 import BalancesList from '../components/BalancesList';
 import SettlementPlan from '../components/SettlementPlan';
@@ -23,11 +24,18 @@ export default function GroupDetail() {
   // Stati UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  // NUOVO STATO PER LA MODALE DI CONFERMA ELIMINAZIONE
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); 
-  
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
+
+  // --- STATO PER GESTIONE ALERT UNIFICATI ---
+  const [alertConfig, setAlertConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    confirmText: 'Ok',
+    onConfirm: null
+  });
 
   // Stati Gestione Settings
   const [editGroupName, setEditGroupName] = useState('');
@@ -70,6 +78,10 @@ export default function GroupDetail() {
   }, [group, balances]);
 
   // --- HELPERS ---
+  const showAlert = (config) => {
+    setAlertConfig({ isOpen: true, ...config });
+  };
+
   const formatPayerName = (expense) => {
     if (Array.isArray(expense.paidBy)) {
       if (expense.paidBy.length === 1) return expense.paidBy[0].member;
@@ -78,16 +90,48 @@ export default function GroupDetail() {
     return expense.paidBy;
   };
 
+  // --- SOSTITUZIONE WINDOW.CONFIRM ---
+  
   const handleSettleDebt = (settlement) => {
-    const confirmMsg = `Confermi che ${settlement.from} ha restituito ${settlement.amount.toFixed(2)}€ a ${settlement.to}?`;
-    // Nota: anche questo confirm potrebbe essere sostituito in futuro, ma ci concentriamo sul gruppo per ora
-    if (window.confirm(confirmMsg)) {
-      addExpense(group.id, {
-        description: "Saldo Debiti",
-        amount: settlement.amount,
-        paidBy: [{ member: settlement.from, amount: settlement.amount }],
-        involvedMembers: [settlement.to],
-        date: new Date().toISOString()
+    showAlert({
+      title: "Conferma Rimborso",
+      message: `Confermi che ${settlement.from} ha restituito ${settlement.amount.toFixed(2)}€ a ${settlement.to}?`,
+      type: "confirm",
+      confirmText: "Sì, Salda",
+      onConfirm: () => {
+        addExpense(group.id, {
+          description: "Saldo Debiti",
+          amount: settlement.amount,
+          paidBy: [{ member: settlement.from, amount: settlement.amount }],
+          involvedMembers: [settlement.to],
+          date: new Date().toISOString()
+        });
+      }
+    });
+  };
+
+  const handleDeleteExpense = (expenseId) => {
+    showAlert({
+      title: "Elimina Spesa",
+      message: "Sei sicuro? Questa azione ricalcolerà tutti i saldi.",
+      type: "danger",
+      confirmText: "Elimina",
+      onConfirm: () => deleteExpense(group.id, expenseId)
+    });
+  };
+
+  const handleShare = async () => {
+    let text = `📊 *${group.name}*\n\nTotale: ${totalSpent.toFixed(2)}€\n\n*SALDI:*\n`;
+    settlements.forEach(s => text += `👉 ${s.from} -> ${s.to}: ${s.amount.toFixed(2)}€\n`);
+    
+    if (navigator.share) {
+      await navigator.share({ title: group.name, text });
+    } else {
+      navigator.clipboard.writeText(text);
+      showAlert({
+        title: "Copiato!",
+        message: "Riepilogo copiato negli appunti.",
+        type: "info"
       });
     }
   };
@@ -131,18 +175,18 @@ export default function GroupDetail() {
     setIsSettingsOpen(false);
   };
 
-  // --- NUOVA LOGICA DI ELIMINAZIONE GRUPPO ---
-  
-  // 1. Trigger iniziale (clic sul bottone rosso in Impostazioni)
-  const handleTriggerDeleteGroup = () => {
-    setIsSettingsOpen(false); // Chiudiamo le impostazioni
-    setIsDeleteModalOpen(true); // Apriamo la modale di conferma
-  };
-
-  // 2. Conferma effettiva (clic su "Elimina" nella modale)
-  const handleConfirmDelete = () => {
-    deleteGroup(group.id);
-    navigate('/');
+  const handleDeleteGroup = () => {
+    setIsSettingsOpen(false); // Chiudi settings prima di aprire l'alert
+    showAlert({
+      title: "Elimina Gruppo",
+      message: "L'eliminazione è definitiva e irreversibile. Confermi?",
+      type: "danger",
+      confirmText: "Sì, Elimina",
+      onConfirm: () => {
+        deleteGroup(group.id);
+        navigate('/');
+      }
+    });
   };
 
   // --- ALTRI HANDLERS ---
@@ -152,17 +196,11 @@ export default function GroupDetail() {
     if (editingExpense) editExpense(group.id, editingExpense.id, data); else addExpense(group.id, data);
     setIsModalOpen(false);
   };
-  const handleDeleteExpense = (id) => { if (window.confirm('Eliminare spesa?')) deleteExpense(group.id, id); };
-  const handleShare = async () => {
-    let text = `📊 *${group.name}*\n\nTotale: ${totalSpent.toFixed(2)}€\n\n*SALDI:*\n`;
-    settlements.forEach(s => text += `👉 ${s.from} -> ${s.to}: ${s.amount.toFixed(2)}€\n`);
-    if (navigator.share) await navigator.share({ title: group.name, text }); else { navigator.clipboard.writeText(text); alert('Copiato!'); }
-  };
 
   return (
     <div className="pb-24 flex flex-col min-h-screen">
       
-      {/* --- INIZIO BLOCCO FISSO (STICKY) --- */}
+      {/* HEADER STICKY */}
       <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-sm">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -193,10 +231,8 @@ export default function GroupDetail() {
         </div>
       </div>
 
-      {/* CONTENUTO SCROLLABILE */}
       <div className="px-4 mt-6 space-y-6">
 
-        {/* Banner Totale */}
         {activeTab !== 'stats' && activeTab !== 'members' && (
           <div className="bg-gradient-to-r from-primary to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
             <p className="text-sm font-medium opacity-90 uppercase tracking-wider">Totale Gruppo</p>
@@ -301,12 +337,10 @@ export default function GroupDetail() {
         <Button onClick={handleOpenAdd} className="h-14 px-6 rounded-full shadow-xl bg-primary hover:bg-primary-hover text-white flex items-center gap-2"><Plus className="w-6 h-6" /><span className="font-medium">Spesa</span></Button>
       </div>
 
-      {/* MODALE AGGIUNGI/MODIFICA SPESA */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingExpense ? "Modifica" : "Nuova Spesa"}>
         <AddExpenseForm group={group} onSubmit={handleSaveExpense} onCancel={() => setIsModalOpen(false)} initialData={editingExpense} />
       </Modal>
 
-      {/* MODALE IMPOSTAZIONI */}
       <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Impostazioni">
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
           <Input label="Nome del Gruppo" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} />
@@ -330,39 +364,23 @@ export default function GroupDetail() {
           <div className="mt-8 pt-6 border-t border-slate-100">
             <h4 className="text-sm font-semibold text-slate-900 mb-1">Zona Pericolosa</h4>
             <p className="text-xs text-slate-500 mb-4">L'eliminazione del gruppo è definitiva.</p>
-            {/* QUI HO MODIFICATO IL BOTTONE PER USARE LA NUOVA FUNZIONE TRIGGER */}
-            <Button 
-              variant="ghost" 
-              className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" 
-              onClick={handleTriggerDeleteGroup}
-            >
+            <Button variant="ghost" className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" onClick={handleDeleteGroup}>
               <Trash2 className="w-4 h-4 mr-2" /> Elimina Gruppo
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* NUOVA MODALE DI CONFERMA ELIMINAZIONE */}
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Elimina Gruppo">
-        <div className="space-y-4">
-          <div className="bg-red-50 text-danger p-4 rounded-lg flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-bold mb-1">Sei sicuro?</p>
-              <p>L'azione è irreversibile. Tutte le spese, i saldi e la cronologia verranno cancellati per sempre.</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setIsDeleteModalOpen(false)}>
-              Annulla
-            </Button>
-            <Button variant="danger" className="flex-1 bg-danger text-white hover:bg-red-600" onClick={handleConfirmDelete}>
-              Elimina
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* --- NUOVO COMPONENTE ALERT MODULARIZZATO --- */}
+      <AlertDialog 
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
 
     </div>
   );
