@@ -1,23 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { Euro, Users, User } from 'lucide-react';
+import { Euro, Users, User, Tag } from 'lucide-react';
 import { cn } from '../utils/cn';
+
+// Definizione estesa delle categorie
+const CATEGORIES = [
+  { id: 'food', label: 'Cibo & Drink', icon: '🍔' },
+  { id: 'transport', label: 'Trasporti', icon: '✈️' },
+  { id: 'housing', label: 'Casa & Bollette', icon: '🏠' },
+  { id: 'shopping', label: 'Shopping', icon: '🛍️' },
+  { id: 'health', label: 'Salute', icon: '💊' },
+  { id: 'fun', label: 'Svago', icon: '🎉' },
+  { id: 'travel', label: 'Viaggi', icon: '🌍' },
+  { id: 'pets', label: 'Animali', icon: '🐾' },
+  { id: 'gifts', label: 'Regali', icon: '🎁' },
+  { id: 'other', label: 'Altro', icon: '🔹' }
+];
 
 export default function AddExpenseForm({ group, onSubmit, onCancel, initialData = null }) {
   const [description, setDescription] = useState('');
+  // Inizializza a stringa vuota per mostrare "Seleziona Categoria"
+  const [category, setCategory] = useState(''); 
   
-  // Gestione Modalità Pagamento
-  const [payerMode, setPayerMode] = useState('single'); // 'single' | 'multiple'
-  
-  // Dati Pagatore Singolo
+  const [payerMode, setPayerMode] = useState('single'); 
   const [singlePayer, setSinglePayer] = useState(group.members[0]);
   const [singleAmount, setSingleAmount] = useState('');
-
-  // Dati Pagatori Multipli (Mappa: { 'Mario': 30, 'Luca': 20 })
   const [multiPayers, setMultiPayers] = useState({});
-
-  // Chi partecipa alla spesa (divisione)
   const [involvedMembers, setInvolvedMembers] = useState(group.members);
   
   const [error, setError] = useState('');
@@ -26,9 +35,10 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
   useEffect(() => {
     if (initialData) {
       setDescription(initialData.description);
+      // Se c'è una categoria salvata usala, altrimenti prova a indovinare o metti 'other' per compatibilità
+      setCategory(initialData.category || 'other'); 
       setInvolvedMembers(initialData.involvedMembers || group.members);
 
-      // Determina se era pagamento singolo o multiplo
       if (Array.isArray(initialData.paidBy)) {
         setPayerMode('multiple');
         const payersMap = {};
@@ -45,16 +55,11 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
     }
   }, [initialData, group.members]);
 
-  // Gestione input importi multipli
   const handleMultiPayerChange = (member, value) => {
     const val = parseFloat(value) || 0;
-    setMultiPayers(prev => ({
-      ...prev,
-      [member]: val
-    }));
+    setMultiPayers(prev => ({ ...prev, [member]: val }));
   };
 
-  // Calcolo Totale Dinamico
   const totalAmount = payerMode === 'single' 
     ? (parseFloat(singleAmount) || 0)
     : Object.values(multiPayers).reduce((sum, val) => sum + val, 0);
@@ -62,6 +67,12 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    // Validazione Categoria
+    if (!category) {
+      setError('Seleziona una categoria.');
+      return;
+    }
+
     if (!description.trim()) {
       setError('Inserisci una descrizione.');
       return;
@@ -80,11 +91,8 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
     let finalPaidBy;
 
     if (payerMode === 'single') {
-      // TRUCCO: Salviamo sempre come array, così il backend è coerente
-      // [{ member: "Mario", amount: 50 }]
       finalPaidBy = [{ member: singlePayer, amount: totalAmount }];
     } else {
-      // Filtriamo solo chi ha messo soldi (> 0)
       finalPaidBy = Object.entries(multiPayers)
         .filter(([_, amount]) => amount > 0)
         .map(([member, amount]) => ({ member, amount }));
@@ -97,8 +105,9 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
 
     const expenseData = {
       description,
+      category, 
       amount: totalAmount,
-      paidBy: finalPaidBy, // Ora è sempre un array di oggetti
+      paidBy: finalPaidBy,
       involvedMembers
     };
 
@@ -117,10 +126,34 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Descrizione */}
+      
+      {/* 1. SELEZIONE CATEGORIA */}
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700">Categoria</label>
+        <div className="relative">
+          <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <select
+            className={cn(
+              "flex h-10 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none appearance-none",
+              !category && "text-slate-400" // Colore grigio se è placeholder
+            )}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="" disabled>Seleziona Categoria</option>
+            {CATEGORIES.map(cat => (
+              <option key={cat.id} value={cat.id} className="text-slate-900">
+                {cat.icon} {cat.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 2. DESCRIZIONE */}
       <Input
         label="Descrizione"
-        placeholder="Es. Cena pizzeria"
+        placeholder={category === 'other' ? "Specifica (es. Spese Condominio)" : "Es. Cena da Mario"}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
       />
@@ -152,7 +185,7 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
           </button>
         </div>
 
-        {/* CONTENUTO: PAGATORE SINGOLO */}
+        {/* INPUT IMPORTI */}
         {payerMode === 'single' && (
           <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex gap-2">
@@ -184,7 +217,6 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
           </div>
         )}
 
-        {/* CONTENUTO: PAGATORI MULTIPLI */}
         {payerMode === 'multiple' && (
           <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200 bg-slate-50 p-3 rounded-lg border border-slate-100 max-h-[150px] overflow-y-auto">
             {group.members.map(member => (
@@ -211,7 +243,7 @@ export default function AddExpenseForm({ group, onSubmit, onCancel, initialData 
         )}
       </div>
 
-      {/* SEZIONE: PER CHI È LA SPESA (Divisione) */}
+      {/* SEZIONE: PER CHI È LA SPESA */}
       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
         <label className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
           Per chi è la spesa? (Divisione)
