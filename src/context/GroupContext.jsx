@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 const GroupContext = createContext();
 
@@ -8,27 +9,53 @@ export const useGroups = () => {
   return context;
 };
 
+// Helper per generare codici brevi
+const generateShareCode = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
 export const GroupProvider = ({ children }) => {
+  const { user } = useAuth();
+  
   const [groups, setGroups] = useState(() => {
     const saved = localStorage.getItem('smartsplit_groups');
-    return saved ? JSON.parse(saved) : [];
+    let loadedGroups = saved ? JSON.parse(saved) : [];
+
+    // --- AUTO-MIGRAZIONE (FIX PER GRUPPI VECCHI) ---
+    // Se un gruppo non ha shareCode o createdBy, li aggiungiamo ora.
+    loadedGroups = loadedGroups.map(group => ({
+      ...group,
+      // Se manca il codice, ne generiamo uno
+      shareCode: group.shareCode || generateShareCode(),
+      // Se manca il creatore, lo marchiamo come 'legacy' (o lo assegnamo all'utente corrente se c'è)
+      createdBy: group.createdBy || 'legacy' 
+    }));
+
+    return loadedGroups;
   });
 
   useEffect(() => {
     localStorage.setItem('smartsplit_groups', JSON.stringify(groups));
   }, [groups]);
 
-  // --- AZIONI BASE ---
+  // --- AZIONI ---
 
   const addGroup = (name, members) => {
     const newGroup = {
       id: crypto.randomUUID(),
+      shareCode: generateShareCode(),
+      createdBy: user?.id || 'guest',
       name,
-      members, // Array di stringhe ['Mario', 'Luigi']
+      members, 
       expenses: [],
       createdAt: new Date().toISOString(),
     };
     setGroups((prev) => [newGroup, ...prev]);
+  };
+
+  const joinGroup = (code) => {
+    const targetGroup = groups.find(g => g.shareCode === code);
+    return !!targetGroup; 
   };
 
   const deleteGroup = (id) => {
@@ -38,8 +65,6 @@ export const GroupProvider = ({ children }) => {
   const getGroup = (id) => {
     return groups.find((g) => g.id === id);
   };
-
-  // --- GESTIONE SPESE ---
 
   const addExpense = (groupId, expenseData) => {
     setGroups((prev) => prev.map(group => {
@@ -56,10 +81,7 @@ export const GroupProvider = ({ children }) => {
   const deleteExpense = (groupId, expenseId) => {
     setGroups((prev) => prev.map(group => {
       if (group.id !== groupId) return group;
-      return {
-        ...group,
-        expenses: group.expenses.filter(e => e.id !== expenseId)
-      };
+      return { ...group, expenses: group.expenses.filter(e => e.id !== expenseId) };
     }));
   };
 
@@ -68,21 +90,11 @@ export const GroupProvider = ({ children }) => {
       if (group.id !== groupId) return group;
       return {
         ...group,
-        expenses: group.expenses.map(e => 
-          e.id === expenseId ? { ...e, ...updatedData } : e
-        )
+        expenses: group.expenses.map(e => e.id === expenseId ? { ...e, ...updatedData } : e)
       };
     }));
   };
 
-  const editGroup = (id, newName) => {
-    setGroups((prev) => prev.map((g) => 
-      g.id === id ? { ...g, name: newName } : g
-    ));
-  };
-
-  // --- GESTIONE AVANZATA GRUPPO (UPDATE FULL) ---
-  
   const updateGroupFull = (groupId, newName, updatedMembers) => {
     setGroups(prev => prev.map(group => {
       if (group.id !== groupId) return group;
@@ -91,37 +103,25 @@ export const GroupProvider = ({ children }) => {
       const finalMemberList = [];
 
       updatedMembers.forEach(memberObj => {
-        // È un nuovo membro?
         if (!memberObj.oldName) {
           finalMemberList.push(memberObj.newName);
           return;
         }
-
         const oldName = memberObj.oldName;
         const newName = memberObj.newName;
         finalMemberList.push(newName);
 
         if (oldName !== newName) {
-          // AGGIORNAMENTO STORICO
           currentExpenses = currentExpenses.map(expense => {
-            // Aggiorna 'paidBy'
             let newPaidBy = expense.paidBy;
-            
-            // Se paidBy è un Array (Pagamento Multiplo)
             if (Array.isArray(newPaidBy)) {
-              newPaidBy = newPaidBy.map(p => 
-                p.member === oldName ? { ...p, member: newName } : p
-              );
-            } 
-            // Se paidBy è una Stringa (Pagamento Singolo Vecchio)
-            else if (newPaidBy === oldName) {
+              newPaidBy = newPaidBy.map(p => p.member === oldName ? { ...p, member: newName } : p);
+            } else if (newPaidBy === oldName) {
               newPaidBy = newName;
             }
-
             return {
               ...expense,
               paidBy: newPaidBy,
-              // Aggiorna array 'involvedMembers'
               involvedMembers: expense.involvedMembers.map(m => m === oldName ? newName : m)
             };
           });
@@ -138,17 +138,7 @@ export const GroupProvider = ({ children }) => {
   };
 
   return (
-    <GroupContext.Provider value={{ 
-      groups, 
-      addGroup, 
-      deleteGroup, 
-      editGroup,
-      updateGroupFull, 
-      getGroup, 
-      addExpense, 
-      deleteExpense, 
-      editExpense 
-    }}>
+    <GroupContext.Provider value={{ groups, addGroup, joinGroup, deleteGroup, updateGroupFull, getGroup, addExpense, deleteExpense, editExpense }}>
       {children}
     </GroupContext.Provider>
   );

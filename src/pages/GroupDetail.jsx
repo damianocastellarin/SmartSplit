@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Receipt, Wallet, BarChart3, Share2, Pencil, Trash2, Settings, Save, AlertTriangle, Users, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Plus, Receipt, Wallet, BarChart3, Share2, Pencil, Trash2, Settings, Save, AlertTriangle, Users, Trophy, TrendingUp, TrendingDown, Copy, Hash, ShieldAlert } from 'lucide-react';
 import { useGroups } from '../context/GroupContext';
+import { useAuth } from '../context/AuthContext'; // Importa Auth
 import { calculateGroupStats, calculateSettlements } from '../services/balanceService';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { AlertDialog } from '../components/ui/AlertDialog';
-import { ShareBalance } from '../components/ShareBalance'; // NUOVO COMPONENTE
+import { ShareBalance } from '../components/ShareBalance';
 import { cn } from '../utils/cn';
 import AddExpenseForm from '../components/AddExpenseForm';
 import BalancesList from '../components/BalancesList';
@@ -19,31 +20,34 @@ export default function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getGroup, addExpense, deleteExpense, editExpense, deleteGroup, updateGroupFull } = useGroups();
+  const { user } = useAuth(); // Utente corrente
   
   const group = getGroup(id);
 
   // Stati UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false); // NUOVO STATO
-  
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
 
   // Stato Alert
-  const [alertConfig, setAlertConfig] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    type: 'info',
-    confirmText: 'Ok',
-    onConfirm: null
-  });
+  const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info', confirmText: 'Ok', onConfirm: null });
 
   // Stati Settings
   const [editGroupName, setEditGroupName] = useState('');
   const [editMembers, setEditMembers] = useState([]);
   const [settingsError, setSettingsError] = useState('');
+
+  // --- PERMESSI ---
+  // Sei admin se sei Guest (per retrocompatibilità) o se il tuo ID matcha createdBy
+ // --- PERMESSI ---
+  // Sei admin se: 
+  // 1. Sei Guest
+  // 2. Sei il creatore del gruppo
+  // 3. Il gruppo è "legacy" (creato prima dell'aggiornamento)
+  const isGuest = user?.isGuest;
+  const isAdmin = isGuest || (group && (group.createdBy === user?.id || group.createdBy === 'legacy'));
 
   useEffect(() => {
     if (group) {
@@ -58,7 +62,6 @@ export default function GroupDetail() {
   const balances = calculateGroupStats(group);
   const settlements = calculateSettlements(balances);
   
-  // Calcolo Totale (Escludendo i rimborsi)
   const totalSpent = group.expenses.reduce((sum, exp) => {
     if (exp.description === "Saldo Debiti") return sum;
     return sum + exp.amount;
@@ -123,6 +126,24 @@ export default function GroupDetail() {
     });
   };
 
+  const handleShare = async () => {
+    let text = `📊 *${group.name}*\n\nTotale: ${totalSpent.toFixed(2)}€\n\n*SALDI:*\n`;
+    settlements.forEach(s => text += `👉 ${s.from} -> ${s.to}: ${s.amount.toFixed(2)}€\n`);
+    if (navigator.share) {
+      await navigator.share({ title: group.name, text });
+    } else {
+      navigator.clipboard.writeText(text);
+      showAlert({ title: "Copiato!", message: "Riepilogo copiato negli appunti.", type: "info" });
+    }
+  };
+
+  // --- Funzione Copia Codice Gruppo ---
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(group.shareCode);
+    showAlert({ title: "Codice Copiato", message: `Codice ${group.shareCode} copiato negli appunti!`, type: "info" });
+  };
+
+  // --- Handlers Settings ---
   const handleMemberNameChange = (index, val) => {
     const newMembers = [...editMembers];
     newMembers[index].newName = val;
@@ -179,7 +200,7 @@ export default function GroupDetail() {
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* HEADER STICKY */}
+      {/* HEADER */}
       <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-sm">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -190,14 +211,8 @@ export default function GroupDetail() {
             </div>
           </div>
           <div className="flex gap-1">
-            {/* BOTTONE SHARE MODIFICATO: Apre la Modale */}
             {activeTab === 'balances' && settlements.length > 0 && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsShareModalOpen(true)} 
-                className="text-primary"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setIsShareModalOpen(true)} className="text-primary">
                 <Share2 className="w-5 h-5" />
               </Button>
             )}
@@ -221,6 +236,7 @@ export default function GroupDetail() {
       </div>
 
       <div className="px-4 mt-6 space-y-6">
+        {/* Banner Totale */}
         {activeTab !== 'stats' && activeTab !== 'members' && (
           <div className="bg-gradient-to-r from-primary to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
             <p className="text-sm font-medium opacity-90 uppercase tracking-wider">Totale Gruppo</p>
@@ -228,13 +244,12 @@ export default function GroupDetail() {
           </div>
         )}
 
-        {/* TAB SPESE */}
+        {/* TAB CONTENUTI (Uguale a prima - omesso per brevità, solo copia incolla dal vecchio file) */}
         {activeTab === 'expenses' && (
           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {group.expenses.length === 0 ? <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-xl border border-dashed"><p>Nessuna spesa.</p></div> : 
               group.expenses.map((expense) => {
                 const isSettlement = expense.description === "Saldo Debiti";
-                
                 return (
                   <Card key={expense.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-4 flex justify-between items-center">
@@ -252,7 +267,6 @@ export default function GroupDetail() {
                           {isSettlement ? '' : '-'}
                           {expense.amount.toFixed(2)} €
                         </span>
-                        
                         <div className="flex items-center gap-1">
                           <button onClick={() => handleOpenEdit(expense)} className="p-2 text-slate-400 hover:text-blue-500 rounded-full"><Pencil className="w-4 h-4" /></button>
                           <button onClick={() => handleDeleteExpense(expense.id)} className="p-2 text-slate-400 hover:text-danger rounded-full"><Trash2 className="w-4 h-4" /></button>
@@ -265,8 +279,7 @@ export default function GroupDetail() {
             }
           </div>
         )}
-
-        {/* TAB MEMBRI */}
+        
         {activeTab === 'members' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="grid grid-cols-1 gap-3">
@@ -313,7 +326,6 @@ export default function GroupDetail() {
           </div>
         )}
 
-        {/* TAB SALDI */}
         {activeTab === 'balances' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <BalancesList balances={balances} />
@@ -321,11 +333,9 @@ export default function GroupDetail() {
           </div>
         )}
 
-        {/* TAB STATS */}
         {activeTab === 'stats' && <StatsDashboard group={group} />}
       </div> 
 
-      {/* FAB: Mostra SOLO se siamo nel tab 'expenses' */}
       {activeTab === 'expenses' && (
         <div className="absolute bottom-6 right-6 z-20">
           <Button onClick={handleOpenAdd} className="h-14 px-6 rounded-full shadow-xl bg-primary hover:bg-primary-hover text-white flex items-center gap-2">
@@ -335,51 +345,83 @@ export default function GroupDetail() {
         </div>
       )}
 
+      {/* MODALI - Non modificati tranne Settings */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingExpense ? "Modifica" : "Nuova Spesa"}>
         <AddExpenseForm group={group} onSubmit={handleSaveExpense} onCancel={() => setIsModalOpen(false)} initialData={editingExpense} />
       </Modal>
 
+      {/* MODALE IMPOSTAZIONI AGGIORNATA */}
       <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Impostazioni">
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-          <Input label="Nome del Gruppo" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} />
+          
+          {/* SCHEDA CODICE GRUPPO (VISIBILE A TUTTI) */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Codice Invito</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-white border border-slate-300 rounded-lg p-2 text-center font-mono text-lg font-bold text-slate-800 tracking-widest">
+                {group.shareCode || "N/A"}
+              </div>
+              <Button variant="secondary" size="icon" onClick={handleCopyCode}>
+                <Copy className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">Condividi questo codice per far entrare altre persone nel gruppo.</p>
+          </div>
+
+          <Input label="Nome del Gruppo" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} disabled={!isAdmin} />
+          
           <div className="space-y-3">
             <label className="text-sm font-medium text-slate-700">Partecipanti</label>
             {editMembers.map((member, index) => (
               <div key={member.id} className="flex gap-2 items-center">
-                <Input value={member.newName} onChange={(e) => handleMemberNameChange(index, e.target.value)} className="flex-1" />
-                <Button variant="ghost" size="icon" onClick={() => handleRemoveMemberSlot(index)} disabled={editMembers.length <= 2} className="text-slate-400 hover:text-danger hover:bg-red-50"><Trash2 className="w-5 h-5" /></Button>
+                <Input value={member.newName} onChange={(e) => handleMemberNameChange(index, e.target.value)} className="flex-1" disabled={!isAdmin} />
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" onClick={() => handleRemoveMemberSlot(index)} disabled={editMembers.length <= 2} className="text-slate-400 hover:text-danger hover:bg-red-50"><Trash2 className="w-5 h-5" /></Button>
+                )}
               </div>
             ))}
-            <Button type="button" variant="ghost" onClick={handleAddMemberSlot} className="w-full border border-dashed border-slate-300 text-slate-500 hover:text-primary hover:border-primary hover:bg-primary/5">
-              <Plus className="w-4 h-4 mr-2" /> Aggiungi Persona
-            </Button>
+            {isAdmin && (
+              <Button type="button" variant="ghost" onClick={handleAddMemberSlot} className="w-full border border-dashed border-slate-300 text-slate-500 hover:text-primary hover:border-primary hover:bg-primary/5">
+                <Plus className="w-4 h-4 mr-2" /> Aggiungi Persona
+              </Button>
+            )}
           </div>
+          
           {settingsError && <div className="bg-red-50 text-danger p-3 rounded-lg text-sm flex gap-2"><AlertTriangle className="w-4 h-4" />{settingsError}</div>}
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setIsSettingsOpen(false)}>Annulla</Button>
-            <Button className="flex-1" onClick={handleSaveSettings}><Save className="w-4 h-4 mr-2" /> Salva Modifiche</Button>
-          </div>
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <h4 className="text-sm font-semibold text-slate-900 mb-1">Zona Pericolosa</h4>
-            <p className="text-xs text-slate-500 mb-4">L'eliminazione del gruppo è definitiva.</p>
-            <Button variant="ghost" className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" onClick={handleDeleteGroup}>
-              <Trash2 className="w-4 h-4 mr-2" /> Elimina Gruppo
-            </Button>
-          </div>
+          
+          {/* BOTTONI AZIONI */}
+          {isAdmin ? (
+            <>
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setIsSettingsOpen(false)}>Annulla</Button>
+                <Button className="flex-1" onClick={handleSaveSettings}><Save className="w-4 h-4 mr-2" /> Salva Modifiche</Button>
+              </div>
+              <div className="mt-8 pt-6 border-t border-slate-100">
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Zona Pericolosa</h4>
+                <p className="text-xs text-slate-500 mb-4">L'eliminazione del gruppo è definitiva.</p>
+                <Button variant="ghost" className="w-full border border-red-200 text-danger hover:bg-red-50 hover:text-red-700 transition-colors" onClick={handleDeleteGroup}>
+                  <Trash2 className="w-4 h-4 mr-2" /> Elimina Gruppo
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="bg-blue-50 text-blue-800 p-4 rounded-lg flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
+              <p className="text-sm">Solo l'amministratore del gruppo può modificare i membri o eliminare il gruppo.</p>
+            </div>
+          )}
         </div>
       </Modal>
 
-      {/* --- NUOVA MODALE CONDIVISIONE --- */}
       <ShareBalance
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         group={group}
         totalSpent={totalSpent}
         settlements={settlements}
-        showAlert={showAlert} // Passiamo la funzione per mostrare gli alert
+        showAlert={showAlert} 
       />
 
-      {/* ALERT COMPONENT */}
       <AlertDialog 
         isOpen={alertConfig.isOpen}
         onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
