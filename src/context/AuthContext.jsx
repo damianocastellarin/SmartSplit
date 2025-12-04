@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  updateProfile 
+  updateProfile,
+  sendEmailVerification 
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -17,20 +18,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Ascolta lo stato di login reale da Firebase
+    const savedGuest = localStorage.getItem('smartsplit_guest');
+    
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({
           id: firebaseUser.uid,
           name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
           email: firebaseUser.email,
+          emailVerified: firebaseUser.emailVerified, // Importante: tracciamo se è verificato
           isGuest: false
         });
-        localStorage.removeItem('smartsplit_guest'); // Pulisce sessione ospite
+        localStorage.removeItem('smartsplit_guest');
+      } else if (savedGuest) {
+        setUser(JSON.parse(savedGuest));
       } else {
-        // Se non loggato, controlla se c'è un ospite salvato
-        const savedGuest = localStorage.getItem('smartsplit_guest');
-        setUser(savedGuest ? JSON.parse(savedGuest) : null);
+        setUser(null);
       }
       setLoading(false);
     });
@@ -38,9 +41,21 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // --- AZIONI ---
+
   const signup = async (email, password, name) => {
     const res = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(res.user, { displayName: name });
+    await sendEmailVerification(res.user); // Invia il link
+    
+    // Aggiorniamo lo stato locale
+    setUser({
+      id: res.user.uid,
+      name: name,
+      email: res.user.email,
+      emailVerified: false, // Appena creato non è verificato
+      isGuest: false
+    });
   };
 
   const login = (email, password) => {
@@ -63,8 +78,26 @@ export const AuthProvider = ({ children }) => {
     setUser(guestUser);
   };
 
+  const resendVerification = async () => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      await sendEmailVerification(auth.currentUser);
+    }
+  };
+
+  // Funzione per controllare manualmente se l'utente ha cliccato il link
+  const checkVerification = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload(); // Ricarica i dati da Firebase
+      if (auth.currentUser.emailVerified) {
+        setUser(prev => ({ ...prev, emailVerified: true }));
+        return true;
+      }
+    }
+    return false;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, signup, login, logout, continueAsGuest, loading }}>
+    <AuthContext.Provider value={{ user, signup, login, logout, continueAsGuest, resendVerification, checkVerification, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

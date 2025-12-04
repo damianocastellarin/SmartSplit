@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wallet, User, Loader2, AlertCircle } from 'lucide-react';
+import { Wallet, User, Loader2, AlertCircle, MailCheck } from 'lucide-react'; // Aggiungi MailCheck
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { useAuth } from '../context/AuthContext';
 
 export default function Welcome() {
-  const [isLogin, setIsLogin] = useState(true); // Toggle tra Login e Registrazione
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false); // Nuovo stato per messaggio successo
   
-  // Campi form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -27,14 +27,16 @@ export default function Welcome() {
     try {
       if (isLogin) {
         await login(email, password);
+        navigate('/');
       } else {
         if (!name.trim()) throw new Error("Inserisci il tuo nome.");
         await signup(email, password, name);
+        // Invece di navigare subito, mostriamo messaggio di verifica
+        setVerificationSent(true);
+        setIsLogin(true); // Switcha a login
       }
-      navigate('/'); // Vai alla Home dopo il login
     } catch (err) {
       console.error(err);
-      // Messaggi errore amichevoli
       if (err.code === 'auth/invalid-credential') setError('Email o password errati.');
       else if (err.code === 'auth/email-already-in-use') setError('Questa email è già usata.');
       else if (err.code === 'auth/weak-password') setError('Password troppo corta (min 6 caratteri).');
@@ -54,7 +56,6 @@ export default function Welcome() {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
       <div className="w-full max-w-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
-        {/* Logo */}
         <div className="text-center space-y-2">
           <div className="bg-white p-4 rounded-2xl shadow-sm inline-flex mb-2">
             <Wallet className="w-10 h-10 text-primary" />
@@ -64,16 +65,15 @@ export default function Welcome() {
         </div>
 
         <Card className="border-0 shadow-xl overflow-hidden">
-          {/* Header Card (Tab) */}
           <div className="flex border-b border-slate-100">
             <button
-              onClick={() => { setIsLogin(true); setError(''); }}
+              onClick={() => { setIsLogin(true); setError(''); setVerificationSent(false); }}
               className={`flex-1 py-4 text-sm font-medium transition-colors ${isLogin ? 'text-primary border-b-2 border-primary bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               Accedi
             </button>
             <button
-              onClick={() => { setIsLogin(false); setError(''); }}
+              onClick={() => { setIsLogin(false); setError(''); setVerificationSent(false); }}
               className={`flex-1 py-4 text-sm font-medium transition-colors ${!isLogin ? 'text-primary border-b-2 border-primary bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               Registrati
@@ -81,6 +81,18 @@ export default function Welcome() {
           </div>
 
           <CardContent className="p-6 space-y-6">
+            
+            {/* Messaggio Successo Registrazione */}
+            {verificationSent && (
+              <div className="bg-emerald-50 text-emerald-800 text-sm p-4 rounded-lg flex items-start gap-3 border border-emerald-100">
+                <MailCheck className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Controlla la tua email!</p>
+                  <p>Ti abbiamo inviato un link di conferma. Cliccalo e poi accedi qui.</p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               
               {!isLogin && (

@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// La tua configurazione (quella che mi hai mandato)
 const firebaseConfig = {
   apiKey: "AIzaSyD_4CJlIkIWGL3vJhmnVP5zhouA1uiQWSY",
   authDomain: "smartsplit-9c2e6.firebaseapp.com",
@@ -12,10 +13,11 @@ const firebaseConfig = {
   measurementId: "G-9H9MPJNNXC"
 };
 
-// Inizializza l'app
+// Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 
-// Esporta i servizi per usarli nel resto dell'app
+// ESPORTA I SERVIZI (Fondamentale!)
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
 export default app;

@@ -13,7 +13,6 @@ export const useGroups = () => {
   return context;
 };
 
-// Genera codice breve
 const generateShareCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
 export const GroupProvider = ({ children }) => {
@@ -23,39 +22,58 @@ export const GroupProvider = ({ children }) => {
 
   // --- SINCRONIZZAZIONE DATI ---
   useEffect(() => {
+    // 1. Se l'utente non è ancora caricato o non esiste
     if (!user) {
       setGroups([]);
       setLoading(false);
       return;
     }
 
-    // A. MODALITÀ OSPITE (Locale)
+    // 2. Utente OSPITE (Locale)
     if (user.isGuest) {
+      console.log("Modalità Ospite: Carico da LocalStorage");
       const saved = localStorage.getItem(`smartsplit_groups_guest`);
       setGroups(saved ? JSON.parse(saved) : []);
       setLoading(false);
       return;
     }
 
-    // B. MODALITÀ LOGGATO (Firestore - Online)
-    // Scarica solo i gruppi dove l'utente è membro
-    const q = query(
-      collection(db, "groups"),
-      where("membersIds", "array-contains", user.id)
-    );
+    // 3. Utente LOGGATO (Firestore)
+    console.log("Modalità Online: Connessione a Firestore...", user.id);
+    setLoading(true);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const groupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      // Ordina per data creazione
-      groupsData.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      setGroups(groupsData);
+    try {
+      // Verifica che 'db' sia inizializzato
+      if (!db) throw new Error("Database non inizializzato in firebase.js");
+
+      const q = query(
+        collection(db, "groups"),
+        where("membersIds", "array-contains", user.id)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const groupsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        // Ordina: più recenti in alto
+        groupsData.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        
+        console.log("Gruppi scaricati:", groupsData.length);
+        setGroups(groupsData);
+        setLoading(false);
+      }, (error) => {
+        console.error("ERRORE FIRESTORE:", error);
+        // Se c'è un errore (es. permessi), ferma il caricamento per non bloccare la UI
+        setLoading(false); 
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("Errore critico setup listener:", err);
       setLoading(false);
-    });
+    }
 
-    return () => unsubscribe();
   }, [user]);
 
   // Salva in locale solo se ospite
@@ -74,7 +92,7 @@ export const GroupProvider = ({ children }) => {
       createdBy: user.id,
       createdAt: new Date().toISOString(),
       members: memberNames,
-      membersIds: [user.id], // Importante per i permessi e la visibilità
+      membersIds: [user.id], 
       expenses: []
     };
 
@@ -99,10 +117,8 @@ export const GroupProvider = ({ children }) => {
       const groupDoc = querySnapshot.docs[0];
       const groupData = groupDoc.data();
 
-      // Se sei già dentro, ritorna true
       if (groupData.membersIds.includes(user.id)) return true;
 
-      // Aggiungiti al gruppo
       await updateDoc(doc(db, "groups", groupDoc.id), {
         membersIds: arrayUnion(user.id),
         members: arrayUnion(user.name) 
@@ -124,7 +140,6 @@ export const GroupProvider = ({ children }) => {
 
   const getGroup = (id) => groups.find(g => g.id === id);
 
-  // Helper per aggiornare un gruppo (gestisce sia locale che cloud)
   const _updateGroup = async (groupId, changes) => {
     if (user.isGuest) {
       setGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...changes } : g));
