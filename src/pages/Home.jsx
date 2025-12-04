@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 
 export default function Home() {
-  const { groups, loading } = useGroups(); // Ora usiamo il loading reale dal database
+  const { groups, loading } = useGroups(); // Ora usiamo il loading reale
   const { user, logout } = useAuth();
 
   return (

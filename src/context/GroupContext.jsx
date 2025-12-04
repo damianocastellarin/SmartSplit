@@ -74,7 +74,7 @@ export const GroupProvider = ({ children }) => {
       createdBy: user.id,
       createdAt: new Date().toISOString(),
       members: memberNames,
-      membersIds: [user.id], // Importante per i permessi
+      membersIds: [user.id], // Importante per i permessi e la visibilità
       expenses: []
     };
 
@@ -133,8 +133,6 @@ export const GroupProvider = ({ children }) => {
     }
   };
 
-  // Le funzioni di modifica devono calcolare l'intero nuovo array di spese
-  // perché su Firestore aggiorniamo l'intero campo 'expenses'
   const addExpense = (groupId, expenseData) => {
     const group = getGroup(groupId);
     if (!group) return;
