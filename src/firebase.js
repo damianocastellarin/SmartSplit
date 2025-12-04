@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore"; // Importa questo
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD_4CJlIkIWGL3vJhmnVP5zhouA1uiQWSY",
@@ -12,8 +12,10 @@ const firebaseConfig = {
   measurementId: "G-9H9MPJNNXC"
 };
 
+// Inizializza l'app
 const app = initializeApp(firebaseConfig);
 
+// Esporta i servizi per usarli nel resto dell'app
 export const auth = getAuth(app);
-export const db = getFirestore(app); // ESPORTA IL DATABASE
+export const db = getFirestore(app);
 export default app;

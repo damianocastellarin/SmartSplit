@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 
 export default function Home() {
-  const { groups, loading } = useGroups(); // Prendi anche 'loading'
+  const { groups, loading } = useGroups(); // Ora usiamo il loading reale dal database
   const { user, logout } = useAuth();
 
   return (
@@ -66,12 +66,10 @@ export default function Home() {
                 <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group">
                   <CardContent className="p-5 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      {/* Avatar */}
                       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
                         {group.name.substring(0, 2).toUpperCase()}
                       </div>
                       
-                      {/* Info */}
                       <div className="overflow-hidden">
                         <h3 className="font-semibold text-slate-900 truncate pr-2">{group.name}</h3>
                         <div className="flex items-center gap-2 mt-1">

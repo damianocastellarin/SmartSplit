@@ -17,26 +17,20 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Controlla se c'è un utente "Ospite" salvato nel browser
-    const savedGuest = localStorage.getItem('smartsplit_guest');
-    
-    // 2. Ascolta Firebase per utenti reali
+    // Ascolta lo stato di login reale da Firebase
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // UTENTE LOGGATO VERO
         setUser({
           id: firebaseUser.uid,
           name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
           email: firebaseUser.email,
           isGuest: false
         });
-        // Rimuovi sessione ospite se si logga
-        localStorage.removeItem('smartsplit_guest');
-      } else if (savedGuest) {
-        // UTENTE OSPITE (Fallback)
-        setUser(JSON.parse(savedGuest));
+        localStorage.removeItem('smartsplit_guest'); // Pulisce sessione ospite
       } else {
-        setUser(null);
+        // Se non loggato, controlla se c'è un ospite salvato
+        const savedGuest = localStorage.getItem('smartsplit_guest');
+        setUser(savedGuest ? JSON.parse(savedGuest) : null);
       }
       setLoading(false);
     });
@@ -44,18 +38,9 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  // --- AZIONI ---
-
   const signup = async (email, password, name) => {
     const res = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(res.user, { displayName: name });
-    // Aggiorna stato locale subito
-    setUser({
-      id: res.user.uid,
-      name: name,
-      email: res.user.email,
-      isGuest: false
-    });
   };
 
   const login = (email, password) => {
