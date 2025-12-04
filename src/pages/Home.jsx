@@ -1,13 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Users, ArrowRight, Sparkles, Receipt, Search, Hash } from 'lucide-react';
+import { Plus, Users, ArrowRight, Sparkles, Receipt, Search, Hash, Loader2 } from 'lucide-react';
 import { useGroups } from '../context/GroupContext';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 
 export default function Home() {
-  const { groups } = useGroups();
+  const { groups, loading } = useGroups(); // Prendi anche 'loading'
   const { user, logout } = useAuth();
 
   return (
@@ -21,7 +21,7 @@ export default function Home() {
         <Button variant="ghost" size="sm" onClick={logout} className="text-xs text-slate-400">Esci</Button>
       </div>
 
-      {/* Pulsante Unisciti rapido */}
+      {/* Pulsanti Rapidi */}
       <div className="grid grid-cols-2 gap-3">
         <Link to="/create-group">
           <Button variant="secondary" className="w-full bg-white border border-slate-200 shadow-sm h-12">
@@ -37,7 +37,11 @@ export default function Home() {
 
       {/* Lista Gruppi */}
       <div className="space-y-4">
-        {groups.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : groups.length === 0 ? (
           <Card className="border-dashed border-2 bg-slate-50">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <div className="bg-blue-100 p-4 rounded-full mb-4">
@@ -70,12 +74,9 @@ export default function Home() {
                       {/* Info */}
                       <div className="overflow-hidden">
                         <h3 className="font-semibold text-slate-900 truncate pr-2">{group.name}</h3>
-                        
-                        {/* POSIZIONE: Affiancata | STILE: Originale (Ripristinato) */}
                         <div className="flex items-center gap-2 mt-1">
                            <span className="text-sm text-slate-500">{group.members.length} membri</span>
-                           
-                           {/* Codice Invito (Stile Originale) */}
+                           <span className="text-slate-300 text-[10px]">•</span> 
                            <div className="flex items-center gap-1 text-xs text-slate-400 font-mono bg-slate-50 px-1.5 py-0.5 rounded w-fit border border-slate-100">
                              <Hash className="w-3 h-3" />
                              {group.shareCode}
@@ -84,7 +85,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Totale Spese */}
                     <div className="flex items-center gap-3">
                       {isEmpty ? (
                         <div className="flex items-center gap-1.5 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-slate-200">
