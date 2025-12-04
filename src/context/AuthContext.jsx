@@ -5,7 +5,8 @@ import {
   signOut, 
   onAuthStateChanged,
   updateProfile,
-  sendEmailVerification 
+  sendEmailVerification,
+  sendPasswordResetEmail // Importiamo la funzione per il reset
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -26,7 +27,7 @@ export const AuthProvider = ({ children }) => {
           id: firebaseUser.uid,
           name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
           email: firebaseUser.email,
-          emailVerified: firebaseUser.emailVerified, // Importante: tracciamo se è verificato
+          emailVerified: firebaseUser.emailVerified,
           isGuest: false
         });
         localStorage.removeItem('smartsplit_guest');
@@ -46,14 +47,13 @@ export const AuthProvider = ({ children }) => {
   const signup = async (email, password, name) => {
     const res = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(res.user, { displayName: name });
-    await sendEmailVerification(res.user); // Invia il link
+    await sendEmailVerification(res.user);
     
-    // Aggiorniamo lo stato locale
     setUser({
       id: res.user.uid,
       name: name,
       email: res.user.email,
-      emailVerified: false, // Appena creato non è verificato
+      emailVerified: false,
       isGuest: false
     });
   };
@@ -84,10 +84,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Funzione per controllare manualmente se l'utente ha cliccato il link
   const checkVerification = async () => {
     if (auth.currentUser) {
-      await auth.currentUser.reload(); // Ricarica i dati da Firebase
+      await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
         setUser(prev => ({ ...prev, emailVerified: true }));
         return true;
@@ -96,9 +95,24 @@ export const AuthProvider = ({ children }) => {
     return false;
   };
 
+  // NUOVA FUNZIONE: Reset Password
+  const resetPassword = (email) => {
+    return sendPasswordResetEmail(auth, email);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, signup, login, logout, continueAsGuest, resendVerification, checkVerification, loading }}>
-      {!loading && children}
+    <AuthContext.Provider value={{ 
+      user, 
+      signup, 
+      login, 
+      logout, 
+      continueAsGuest, 
+      resendVerification, 
+      checkVerification, 
+      resetPassword, // Esportiamo la nuova funzione
+      loading 
+    }}>
+      {children}
     </AuthContext.Provider>
   );
 };

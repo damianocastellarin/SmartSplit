@@ -4,7 +4,8 @@ import { getFirestore } from "firebase/firestore";
 
 // La tua configurazione (quella che mi hai mandato)
 const firebaseConfig = {
-  apiKey: "AIzaSyD_4CJlIkIWGL3vJhmnVP5zhouA1uiQWSY",
+ // Invece di: apiKey: "AIzaSy...", usa:
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "smartsplit-9c2e6.firebaseapp.com",
   projectId: "smartsplit-9c2e6",
   storageBucket: "smartsplit-9c2e6.firebasestorage.app",
